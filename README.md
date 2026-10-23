@@ -2,10 +2,9 @@
   <img src="docs/assets/ecu-banner.svg" alt="Rear-wheel ECU — embedded motion control for an autonomous research vehicle" width="100%">
 </p>
 
-<p align="center">
-  <strong>Two motors. Independent feedback. One coordinated drive system.</strong><br>
-  STM32 firmware connecting vehicle-level commands to rear-wheel motion.
-</p>
+# 🚗 STM32 Rear-Wheel ECU for an Autonomous Vehicle
+
+A dual-motor rear-wheel controller built with **STM32F103CBT6, FreeRTOS, and CAN**. The ECU turns steering commands into independent wheel-speed targets, closes the loop with quadrature encoders, and reports vehicle-speed feedback to the central controller.
 
 <p align="center">
   <img src="https://img.shields.io/badge/STM32-F103CBT6-0f172a?style=flat-square&amp;labelColor=1e293b" alt="STM32F103CBT6">
@@ -19,8 +18,10 @@
   <a href="#my-contribution">My contribution</a> &nbsp; · &nbsp;
   <a href="#system-architecture">Architecture</a> &nbsp; · &nbsp;
   <a href="#research-recognition">Research award</a> &nbsp; · &nbsp;
-  <a href="#build-and-run">Build &amp; run</a>
+  <a href="#configuration-and-flashing">Build &amp; run</a>
 </p>
+
+<a id="vehicle-demonstration"></a>
 
 <p align="center">
   <a href="vid_car.mp4">
@@ -47,13 +48,30 @@
 
 <p align="center"><sub>Firmware configuration values; measured control performance remains to be characterized.</sub></p>
 
-## From perception to motion
 
-An autonomous vehicle needs a path from what its cameras see to how its wheels move. Our student research platform distributes that work across **two NVIDIA Jetson boards and three STM32 controllers**: object detection, lane detection, central coordination, front steering, and rear propulsion.
+---
 
-This repository contains the **rear-wheel ECU**. It receives steering commands over CAN, derives separate left and right wheel-speed targets, and uses quadrature encoder feedback to regulate both drive motors. Average rear-wheel speed returns to the central controller over the same bus.
+<a id="table-of-contents"></a>
 
-## My contribution
+## 📑 Table of Contents
+
+| Explore the project | Work with the firmware |
+| --- | --- |
+| [Vehicle demonstration](#vehicle-demonstration) | [Hardware & pinout](#hardware-and-pinout) |
+| [My contribution](#my-contribution) | [Directory structure](#directory-structure) |
+| [System architecture](#system-architecture) | [Prerequisites](#prerequisites) |
+| [Key features](#key-features) | [Configuration & flashing](#configuration-and-flashing) |
+| [Real-time task design](#real-time-task-design) | [Live diagnostics](#live-diagnostics) |
+| [Wheel-speed control](#wheel-speed-control) | [Validation & next steps](#validation-and-next-steps) |
+| [CAN protocol](#can-protocol) | [Research recognition](#research-recognition) |
+
+---
+
+<a id="my-contribution"></a>
+
+## 👨‍💻 My Contribution
+
+The team vehicle combines **two NVIDIA Jetson boards and three STM32 controllers** for object detection, lane detection, central coordination, front steering, and rear propulsion.
 
 **Bùi Đoàn Anh Khoa · Rear-wheel ECU**
 
@@ -69,8 +87,19 @@ My responsibility is the rear-wheel controller and its integration with the cent
 The wider team develops the Jetson perception pipelines, central controller, and steering ECU. This repository focuses on my rear-wheel firmware.
 
 <p align="right"><a href="Core/Src/main.c">Explore the control implementation →</a></p>
+---
 
-## System architecture
+<a id="system-architecture"></a>
+
+## 🏗 System Architecture
+
+| Vehicle module | Hardware | Role |
+| --- | --- | --- |
+| Object detection | Jetson Nano **2 GB** | **YOLOv4-Tiny** object detection |
+| Lane detection | Jetson Nano **4 GB** | **Row-wise segmentation** for lane detection |
+| Central controller | **STM32G431CBU6** mini core board | Central processing and vehicle coordination |
+| Front-wheel ECU | STM32F103CBT6 | Front steering-servo control |
+| **Rear-wheel ECU · this repository** | **STM32F103CBT6** | **Two drive motors, encoder feedback, and speed regulation** |
 
 ```mermaid
 flowchart TB
@@ -109,10 +138,70 @@ flowchart TB
 ```
 
 <sub>Functional system overview. Jetson communication interfaces are not specified in this diagram.</sub>
+---
 
-## Inside the rear-wheel ECU
+<a id="key-features"></a>
 
-The control path combines steering-dependent speed targets with independent wheel feedback:
+## ✨ Key Features
+
+1. **Independent wheel-speed control**<br>
+   Two encoder-feedback loops regulate the left and right motors. Each has separate PI gains and minimum effective PWM settings to accommodate different drive responses.
+
+2. **Periodic real-time execution**<br>
+   A dedicated motor task runs every **10 ms** using `vTaskDelayUntil`. CAN reception, speed transmission, and diagnostic output have separate tasks.
+
+3. **Steering-dependent speed scheduling**<br>
+   The base reference ranges from **0.10 to 0.30 m/s**, reducing with steering demand. Acceleration and deceleration limits shape reference changes.
+
+4. **Electronic differential**<br>
+   A steering-dependent offset adjusts the left and right wheel targets, with a center deadband and maximum differential ratio of **0.10**.
+
+5. **Filtered feedback and anti-windup**<br>
+   Encoder count differences become speed estimates, smoothed by a first-order low-pass filter. Integral clamping and conditional integration limit controller windup.
+
+6. **CAN integration and command supervision**<br>
+   The ECU validates steering commands and publishes average speed every **50 ms**. Timeout and bus-off handling paths are implemented; their open validation findings are documented [below](#validation-and-next-steps).
+
+---
+
+<a id="real-time-task-design"></a>
+
+## ⚙️ Real-Time Task Design
+
+The CAN receive interrupt copies raw frames into a **four-entry queue**. Parsing occurs in task context; the motor-control task owns the encoder, controller, and PWM updates.
+
+```mermaid
+flowchart TB
+    IRQ["CAN RX interrupt"] --> Q["Static receive queue<br/>4 frames"]
+    Q --> RX["CanRxTask<br/>Validate ID, frame type, payload, and angle"]
+    RX --> CMD["Shared command snapshot"]
+    CMD --> MOTOR["MotorControlTask · 10 ms<br/>Encoders → references → PI → PWM"]
+    MOTOR --> SPEED["Shared speed snapshot"]
+    SPEED --> TX["CanTxTask · 50 ms<br/>Average speed → CAN 0x020"]
+    MOTOR --> DEBUG["DebugTask · 500 ms<br/>Status snapshot → USART2"]
+
+    classDef task fill:#0f2535,stroke:#38bdf8,color:#f1f5f9
+    classDef control fill:#064e3b,stroke:#34d399,stroke-width:3px,color:#ecfdf5
+    class RX,TX,DEBUG task
+    class MOTOR control
+```
+
+| Task / function | Trigger | CMSIS-RTOS2 priority | Responsibility |
+| --- | --- | --- | --- |
+| `CanRxTask` | Receive queue; waits when empty | High | Parse and validate commands; update shared state |
+| `MotorControlTask` | Every 10 ms | Realtime | Read encoders, check command state, update references and motor outputs |
+| `CanTxTask` | Every 50 ms | Normal | Send average rear-wheel speed |
+| `DebugTask` | Every 500 ms | Low | Format and transmit a UART status snapshot |
+
+Application task stacks, control blocks, and receive-queue storage use static allocation. Dynamic allocation is not disabled throughout the RTOS configuration.
+
+---
+
+<a id="wheel-speed-control"></a>
+
+## 🎛 Wheel-Speed Control
+
+Each control cycle estimates both wheel speeds, filters the measurements, derives the wheel references, and updates motor PWM.
 
 ```mermaid
 flowchart LR
@@ -126,13 +215,20 @@ flowchart LR
     LPF --> TX["CAN speed feedback"]
 ```
 
-- **Independent wheel regulation.** Each motor has its own controller and minimum effective PWM setting to accommodate different drive responses.
-- **Steering-aware speed targets.** Base speed is reduced with steering demand; a simple electronic differential offsets the left and right targets during turns.
-- **Smoother references and feedback.** Acceleration/deceleration limiting shapes speed changes, while a first-order filter reduces encoder speed noise.
-- **Communication supervision.** The firmware validates incoming commands and contains timeout and bus-off handling paths. The timeout and interrupt findings below still need resolution and hardware verification.
+### Encoder-to-speed conversion
 
-<details>
-<summary><strong>Control parameters and task timing</strong></summary>
+With the configured wheel diameter `D = 0.065 m`, encoder resolution `N = 1560 counts/revolution`, and sample interval `Ts = 0.010 s`:
+
+```text
+wheel_speed = encoder_count_change × (π × D) / (N × Ts)
+
+filtered_speed[k] = 0.30 × wheel_speed[k]
+                  + 0.70 × filtered_speed[k−1]
+
+average_rear_speed = (filtered_left_speed + filtered_right_speed) / 2
+```
+
+### Current tuning and timing
 
 | Parameter | Configured value / implementation |
 | --- | --- |
@@ -150,12 +246,15 @@ flowchart LR
 | CAN feedback period | 50 ms / 20 Hz |
 | UART diagnostic period | 500 ms / 2 Hz |
 
-The controller structures support PID; the current gains give **PI control** because both derivative gains are zero. The electronic differential uses a simple steering-based offset. Application task and queue storage are static; this does not imply that dynamic allocation is disabled throughout FreeRTOS.
+The controller structures support PID; the current gains give **PI control** because both derivative gains are zero. The electronic differential uses a simple steering-based offset.
 
-</details>
+The differential uses a simple steering-dependent offset rather than a geometry-based Ackermann calculation. These constants describe the configured model and tuning, not measured tracking performance.
 
-<details>
-<summary><strong>CAN interface and payload examples</strong></summary>
+---
+
+<a id="can-protocol"></a>
+
+## 📡 CAN Protocol
 
 **Classic CAN · 500 kbit/s · standard 11-bit IDs · little-endian**
 
@@ -173,10 +272,15 @@ The documented payload length is **2 bytes**. The current receiver accepts at le
 | Steering command: 90° | 9000 centi-degrees | `28 23` |
 | Speed feedback: 0.25 m/s | 250 mm/s | `FA 00` |
 
-</details>
+For example, a standard data frame with ID `0x040`, DLC `2`, and payload `28 23` commands the **90° steering center**. The command must be refreshed within the configured freshness window to request continued drive operation. Resolve the timebase finding before relying on timeout behavior.
 
-<details>
-<summary><strong>MCU pin mapping and physical interfaces</strong></summary>
+---
+
+<a id="hardware-and-pinout"></a>
+
+## 🔌 Hardware & Pinout
+
+Required for rear-wheel ECU integration: an STM32F103CBT6 board, two encoder-equipped drive motors, a suitable motor driver, a CAN transceiver, and an ST-LINK programmer.
 
 | Function | Peripheral | MCU pins |
 | --- | --- | --- |
@@ -189,10 +293,125 @@ The documented payload length is **2 bytes**. The current receiver accepts at le
 UART: **115200 baud · 8 data bits · no parity · 1 stop bit**.
 
 CAN uses an external transceiver and a terminated bus. PWM outputs connect through a suitable motor driver. The driver model and complete vehicle wiring have yet to be documented.
+---
 
-</details>
+<a id="directory-structure"></a>
 
-## Research recognition
+## 📁 Directory Structure
+
+```text
+stm32-rear-wheel-ecu/
+├── Core/
+│   ├── Inc/
+│   │   ├── FreeRTOSConfig.h          # RTOS configuration
+│   │   └── main.h                   # Application declarations
+│   └── Src/
+│       ├── main.c                   # Control, CAN, application tasks, initialization
+│       ├── stm32f1xx_hal_msp.c       # Peripheral GPIO, clocks, and NVIC setup
+│       └── stm32f1xx_it.c            # Interrupt handlers
+├── Drivers/                         # STM32 HAL and CMSIS dependencies
+├── Middlewares/                     # FreeRTOS dependencies
+├── docs/assets/                     # README banner
+├── scientific-cert/                 # Team certificate and award photograph
+├── encoder_reading.ioc              # STM32CubeMX configuration
+├── STM32F103CBTX_FLASH.ld            # Linker memory layout
+├── car-cleaned-upscaled.png          # Presentation photograph
+├── car1.jpg                         # Original vehicle photograph
+├── vid_car.mp4                      # Vehicle demonstration
+└── README.md
+```
+
+Start with [`Core/Src/main.c`](Core/Src/main.c) to follow the application. The CubeIDE project files and settings are also included; generated build output is ignored.
+
+---
+
+<a id="prerequisites"></a>
+
+## 📦 Prerequisites
+
+| Tool / component | Purpose |
+| --- | --- |
+| STM32CubeIDE | Import, build, and debug the firmware |
+| ST-LINK and SWD connection | Program the STM32 and inspect execution |
+| Serial terminal + compatible UART adapter | Read USART2 diagnostics |
+| VCU or CAN test interface | Supply steering commands and inspect speed feedback |
+
+The previous recorded build used **STM32CubeIDE 1.18.0** and **GNU Tools for STM32 13.3.rel1**. HAL, CMSIS, and FreeRTOS sources are included in the repository.
+
+---
+
+<a id="configuration-and-flashing"></a>
+
+## 🚀 Configuration & Flashing
+
+### 1. Import and inspect
+
+In STM32CubeIDE, choose **File → Import → General → Existing Projects into Workspace**, then select this folder. The imported project is named **`encoder_reading`**.
+
+Review the pin mapping above and the mechanical constants, encoder signs, PI gains, and PWM thresholds in [`main.c`](Core/Src/main.c) against your actual hardware.
+
+### 2. Build the firmware
+
+Select the **Debug** configuration and use **Project → Build Project**. The IDE generates the build output locally.
+
+### 3. Program the controller
+
+Connect ST-LINK to **SWDIO, SWCLK, and GND**, with the target power/reference connection appropriate to the programmer and board. Confirm the board pinout, then launch the CubeIDE debug configuration to program the MCU.
+
+### 4. Bring up the rear-wheel ECU
+
+1. Lift the drive wheels and verify encoder polarity and motor-driver mapping.
+2. Open USART2 diagnostics at **115200 baud, 8N1**.
+3. Connect the CAN transceiver to the terminated vehicle/test bus at **500 kbit/s**.
+4. Supply valid steering commands on `0x040` and inspect speed feedback on `0x020`.
+5. After resolving the open firmware findings, verify command loss, recovery, and bus-off behavior before a vehicle test.
+
+The original project name is retained to keep the existing CubeIDE metadata consistent.
+
+---
+
+<a id="live-diagnostics"></a>
+
+## 📊 Live Diagnostics
+
+The low-priority debug task prints a status snapshot every **500 ms** through USART2.
+
+### Example output
+
+The following values illustrate the firmware’s output format; they are not captured test results.
+
+```text
+A=90.0 V=0.30 L=0.29 R=0.30 P=24/35
+```
+
+| Field | Meaning | Unit |
+| --- | --- | --- |
+| `A` | Latest steering angle in the shared command state | Degrees |
+| `V` | Base speed reference after ramp limiting | m/s |
+| `L` / `R` | Filtered left / right wheel speeds | m/s |
+| `P` | Left / right motor commands | % |
+
+The debug task uses a blocking UART transmit in its own task context. The status line shows the control snapshot; inspect command freshness and CAN fault counters separately when debugging communication faults.
+
+---
+
+<a id="validation-and-next-steps"></a>
+
+## 🧪 Validation & Next Steps
+
+**Current stage: research prototype with documented source-review findings.** A previous forced Debug rebuild completed without compiler warnings or errors in the captured log. That build was not repeated for this README update. Runtime stack/heap margins and this exact firmware revision’s behavior on hardware remain unverified.
+
+| Open item | Work remaining |
+| --- | --- |
+| CAN interrupt configuration | TX and SCE handlers exist; MSP enables only RX0 NVIC. Enable the missing interrupts with RTOS-compatible priorities and retain the settings through Cube regeneration. |
+| Command timeout timebase | Reception uses `HAL_GetTick()`; motor-task freshness checks use `osKernelGetTickCount()`. Use one clock and verify timeout/recovery behavior. |
+| Hardware characterization | Confirm encoder polarity, measure wheel-speed tracking, and record command-loss/recovery behavior. |
+
+---
+
+<a id="research-recognition"></a>
+
+## 🏅 Research Recognition
 
 > **🏅 Second Prize · Student Scientific Research Conference 2025–2026**
 >
@@ -230,48 +449,6 @@ The team certificate, dated **19 May 2026**, names **Bùi Đoàn Anh Khoa** amon
 The cover photograph is an AI-cleaned and enlarged presentation version of this original image. The supplied [vehicle demonstration (MP4)](vid_car.mp4) documents the team prototype; it does not establish control accuracy or validate this exact firmware revision.
 
 </details>
-
-## Build and run
-
-**Tools:** STM32CubeIDE, an ST-LINK programmer, and the rear ECU hardware. The previously recorded build used **CubeIDE 1.18.0** and **GNU Tools for STM32 13.3.rel1**.
-
-1. **Import** this folder through **File → Import → General → Existing Projects into Workspace**.
-2. **Build** the `encoder_reading` project in its **Debug** configuration.
-3. **Connect** ST-LINK to the board’s SWD interface and ground; confirm target power and the board pinout.
-4. **Program** the MCU using the CubeIDE debug configuration.
-5. **Check** encoder direction, motor-driver mapping, CAN traffic, and command-loss/recovery behavior with the wheels lifted before a vehicle test.
-
-<details>
-<summary><strong>Repository map</strong></summary>
-
-| Path | Purpose |
-| --- | --- |
-| [Core/Src/main.c](Core/Src/main.c) | Control logic, application tasks, and peripheral initialization |
-| [Core/Inc/FreeRTOSConfig.h](Core/Inc/FreeRTOSConfig.h) | RTOS configuration |
-| [Core/Src/stm32f1xx_hal_msp.c](Core/Src/stm32f1xx_hal_msp.c) | Peripheral clocks, GPIO, and interrupt setup |
-| [Core/Src/stm32f1xx_it.c](Core/Src/stm32f1xx_it.c) | Interrupt handlers |
-| [Drivers/](Drivers/) | STM32 HAL and CMSIS dependencies |
-| [Middlewares/](Middlewares/) | FreeRTOS dependencies |
-| [encoder_reading.ioc](encoder_reading.ioc) | STM32CubeMX configuration |
-| [STM32F103CBTX_FLASH.ld](STM32F103CBTX_FLASH.ld) | Linker memory layout |
-| [docs/assets/](docs/assets/) | README artwork |
-| [scientific-cert/](scientific-cert/) | Certificate and award images |
-| [vid_car.mp4](vid_car.mp4) | Vehicle demonstration |
-
-The original CubeIDE project name, `encoder_reading`, is retained for compatibility with the existing project metadata.
-
-</details>
-
-## Engineering status
-
-**Current stage: research prototype with documented source-review findings.** A previous forced Debug rebuild completed without compiler warnings or errors in the captured log. That build was not repeated for this README update. Runtime stack/heap margins and this exact firmware revision’s behavior on hardware remain unverified.
-
-| Open item | Work remaining |
-| --- | --- |
-| CAN interrupt configuration | TX and SCE handlers exist; MSP enables only RX0 NVIC. Enable the missing interrupts with RTOS-compatible priorities and retain the settings through Cube regeneration. |
-| Command timeout timebase | Reception uses `HAL_GetTick()`; motor-task freshness checks use `osKernelGetTickCount()`. Use one clock and verify timeout/recovery behavior. |
-| Hardware characterization | Confirm encoder polarity, measure wheel-speed tracking, and record command-loss/recovery behavior. |
-
 ---
 
 <p align="center">
