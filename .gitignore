@@ -1,0 +1,32 @@
+# Generated build output
+Debug/
+Release/
+build/
+**/.metadata/
+.metadata/
+*.o
+*.d
+*.su
+*.cyclo
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+*.srec
+
+# Local editor / OS files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Private local setup and conversation notes
+CONVERSATION_CONTEXT.md
+GITHUB_PUBLISH_GUIDE.md
+*.log
+.env
+.env.*
+!.env.example
