@@ -195,4 +195,4 @@ Two source-review findings remain open:
 - **CAN interrupts:** TX and SCE handlers exist, but the MSP setup enables only the RX0 NVIC interrupt. Configure the missing interrupts with RTOS-compatible priorities and retain the configuration through Cube regeneration.
 - **Timeout timebase:** reception timestamps use `HAL_GetTick()`, while the motor task checks freshness using `osKernelGetTickCount()`. Use one consistent clock and verify command timeout and recovery on hardware.
 
-Next validation work: confirm these paths, measure wheel-speed tracking, check encoder polarity, and record command-loss/recovery behavior. The older `firmware_updates_summary.md` is historical and does not describe the current CAN/RTOS implementation.
+Next validation work: confirm these paths, measure wheel-speed tracking, check encoder polarity, and record command-loss/recovery behavior.
