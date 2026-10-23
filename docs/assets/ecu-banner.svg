@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="title desc">
+  <title id="title">Rear-wheel ECU</title>
+  <desc id="desc">Embedded motion control for an autonomous research vehicle, with a stylized circuit linking a central ECU to two drive channels.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#0b1222"/><stop offset="1" stop-color="#102c38"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#8ad6dc" stroke-opacity=".055"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="350" rx="20" fill="url(#bg)"/>
+  <rect width="1200" height="350" rx="20" fill="url(#grid)"/>
+  <rect x="0" y="38" width="5" height="274" rx="2" fill="url(#accent)"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <rect x="48" y="41" width="242" height="27" rx="13.5" fill="#173a43" stroke="#2dd4bf" stroke-opacity=".35"/>
+    <circle cx="64" cy="54.5" r="3.5" fill="#5eead4"/>
+    <text x="77" y="59" font-size="10" font-weight="700" letter-spacing="1.7" fill="#99f6e4">AUTONOMOUS VEHICLE RESEARCH</text>
+    <text x="45" y="147" font-size="67" font-weight="700" letter-spacing="-2.5" fill="#f1f5f9">REAR-WHEEL</text>
+    <text x="45" y="219" font-size="67" font-weight="700" letter-spacing="-2.5" fill="#5eead4">ECU</text>
+    <text x="48" y="259" font-size="19" fill="#bacbd9">Embedded motion control. Independent wheel feedback.</text>
+    <text x="48" y="308" font-size="11" font-weight="700" letter-spacing="2.3" fill="#79a4b8">STM32  /  FREERTOS  /  CAN  /  PI CONTROL</text>
+    <path d="M738 174H784 M924 146H971V105H1020 M924 202H971V263H1020" fill="none" stroke="url(#accent)" stroke-width="2.5"/>
+    <path d="M1020 285H949V230H924" fill="none" stroke="#527c8d" stroke-width="1.5" stroke-dasharray="4 5"/>
+    <circle cx="738" cy="174" r="5" fill="#38bdf8"/>
+    <text x="711" y="152" font-size="10" letter-spacing="1.6" fill="#8da8bb">CAN</text>
+    <g stroke="#4a7d8e" stroke-width="2">
+      <path d="M811 122V109 M837 122V109 M863 122V109 M889 122V109 M811 226V239 M837 226V239 M863 226V239 M889 226V239"/>
+      <path d="M784 145H771 M784 174H771 M784 203H771 M924 145H937 M924 174H937 M924 203H937"/>
+    </g>
+    <rect x="784" y="122" width="140" height="104" rx="12" fill="#122a38" stroke="#5eead4" stroke-width="1.5"/>
+    <rect x="794" y="132" width="120" height="84" rx="7" fill="none" stroke="#2dd4bf" stroke-opacity=".18"/>
+    <text x="854" y="160" text-anchor="middle" font-size="11" letter-spacing="2" fill="#cbd5e1">REAR ECU</text>
+    <text x="854" y="188" text-anchor="middle" font-size="25" font-weight="700" fill="#5eead4">100 Hz</text>
+    <text x="854" y="204" text-anchor="middle" font-size="9" letter-spacing="1.2" fill="#91aab8">CONTROL LOOP</text>
+    <g fill="#122a38" stroke="#527c8d" stroke-width="1.5">
+      <rect x="1020" y="68" width="99" height="74" rx="10"/>
+      <rect x="1020" y="226" width="99" height="74" rx="10"/>
+    </g>
+    <g fill="none" stroke="#5eead4" stroke-width="1.5">
+      <circle cx="1069" cy="96" r="13"/><circle cx="1069" cy="254" r="13"/>
+      <path d="M1063 96H1075 M1069 90V102 M1063 254H1075 M1069 248V260"/>
+    </g>
+    <text x="1069" y="125" text-anchor="middle" font-size="10" letter-spacing="1.3" fill="#cbd5e1">LEFT DRIVE</text>
+    <text x="1069" y="283" text-anchor="middle" font-size="10" letter-spacing="1.3" fill="#cbd5e1">RIGHT DRIVE</text>
+    <text x="969" y="328" text-anchor="middle" font-size="9" letter-spacing="2" fill="#648c9e">COMMAND → CONTROL → FEEDBACK</text>
+  </g>
+</svg>
